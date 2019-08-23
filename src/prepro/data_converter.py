@@ -33,7 +33,9 @@ def configure_tokenizer(args):
         os.mkdir(args.tokenizer_dir)
         download_and_extract('stanford-corenlp', args.tokenizer_dir)
 
-    os.environ["CLASSPATH"] = "{}stanford-corenlp-full-{}/stanford-corenlp-{}.jar".format(args.tokenizer_dir, args.tokenizer_date, args.tokenizer_ver)
+    os.environ["CLASSPATH"] = "{}stanford-corenlp-full-{}/stanford-corenlp-{}.jar".format(args.tokenizer_dir,
+                                                                                          args.tokenizer_date,
+                                                                                          args.tokenizer_ver)
 
 
 # Tokenize the raw stories using Stanford CoreNLP
@@ -41,13 +43,13 @@ def tokenize(args):
     # directory to original story files
     stories_dir = os.path.abspath(args.raw_path)
     # directory to tokenized data files
-    tokenized_dir = os.path.abspath(args.toknized_path)
+    tokenized_dir = os.path.abspath(args.tokenized_path)
 
     print("Starting to tokenize %s to %s..." % (stories_dir, tokenized_dir))
 
     # create IO list file
     stories = os.listdir(stories_dir)
-    with open("map_tokenize.txt", "w") as f:
+    with open("mapping_for_corenlp.txt", "w") as f:
         for s in stories:
             if not s.endswith('story'):
                 continue
@@ -56,7 +58,7 @@ def tokenize(args):
     configure_tokenizer(args)
 
     # use Stanford CoreNLP
-    command = ['java', 'edu.stanford.nlp.pipeline.StanfordCoreNLP', '-annotators', 'tokenize,ssplit',
+    command = ['java', 'edu.stanford.nlp.pipeline.StanfordCoreNLP', '-annotators', 'tokenize, ssplit',
                '-ssplit.newlineIsSentenceBreak', 'always', '-filelist', 'mapping_for_corenlp.txt',
                '-outputFormat', 'json', '-outputDirectory', tokenized_dir]
     subprocess.call(command)
@@ -66,8 +68,8 @@ def tokenize(args):
     num_original = len(os.listdir(stories_dir))
     num_tokenized = len(os.listdir(tokenized_dir))
     if num_original != num_tokenized:
-        print("Warning! The tokenized directory %s contains %i files, but the original directory %s contains %i files",
-              (tokenized_dir, num_tokenized, stories_dir, num_original))
+        print("Warning! The tokenized directory %s contains %i files, but the original directory %s contains %i files"
+              % (tokenized_dir, num_tokenized, stories_dir, num_original))
 
 
 def format_json(args):

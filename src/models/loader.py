@@ -28,24 +28,27 @@ class Batch(object):
             pre_segs = [x[2] for x in data]
             pre_clss = [x[3] for x in data]
 
+            # Set src, labels, segs, mask.
             src = torch.tensor(self._pad(pre_src, 0))
-
             labels = torch.tensor(self._pad(pre_labels, 0))
             segs = torch.tensor(self._pad(pre_segs, 0))
             mask = 1 - (src == 0)
 
+            setattr(self, 'src', src.to(device))
+            setattr(self, 'labels', labels.to(device))
+            setattr(self, 'segs', segs.to(device))
+            setattr(self, 'mask', mask.to(device))
+
+            # Set clss, mask_cls.
             clss = torch.tensor(self._pad(pre_clss, -1))
             mask_cls = 1 - (clss == -1)
             clss[clss == -1] = 0
 
             setattr(self, 'clss', clss.to(device))
             setattr(self, 'mask_cls', mask_cls.to(device))
-            setattr(self, 'src', src.to(device))
-            setattr(self, 'labels', labels.to(device))
-            setattr(self, 'segs', segs.to(device))
-            setattr(self, 'mask', mask.to(device))
 
-            if (is_test):
+            # If test, include src_str, tgt_str.
+            if is_test:
                 src_str = [x[-2] for x in data]
                 setattr(self, 'src_str', src_str)
                 tgt_str = [x[-1] for x in data]
@@ -71,6 +74,19 @@ def batch(data, batch_size):
         yield minibatch
 
 
+def simple_batch_size_fn(new, count):
+    src, labels = new[0], new[1]
+    global max_n_sents, max_n_tokens, max_size
+    if count == 1:
+        max_size = 0
+        max_n_sents = 0
+        max_n_tokens = 0
+    max_n_sents = max(max_n_sents, len(src))
+    max_size = max(max_size, max_n_sents)
+    src_elements = count * max_size
+    return src_elements
+
+
 def load_dataset(args, corpus_type, shuffle):
     """
     Dataset generator. Don't do extra stuff here, like printing,
@@ -83,6 +99,7 @@ def load_dataset(args, corpus_type, shuffle):
     """
     assert corpus_type in ["train", "valid", "test"]
 
+    # Loads pt file to dataset, prints message.
     def _lazy_dataset_loader(pt_file, corpus_type):
         dataset = torch.load(pt_file)
         logger.info('Loading %s dataset from %s, number of examples: %d' %
@@ -92,41 +109,28 @@ def load_dataset(args, corpus_type, shuffle):
     # Sort the glob output by file name (by increasing indexes).
     pts = sorted(glob.glob(args.bert_data_path + '.' + corpus_type + '.[0-9]*.pt'))
     if pts:
-        if (shuffle):
+        # Shuffle the dataset.
+        if shuffle:
             random.shuffle(pts)
 
         for pt in pts:
             yield _lazy_dataset_loader(pt, corpus_type)
     else:
-        # Only one inputters.*Dataset, simple!
+        # Only one pt file.
         pt = args.bert_data_path + '.' + corpus_type + '.pt'
         yield _lazy_dataset_loader(pt, corpus_type)
 
 
-def simple_batch_size_fn(new, count):
-    src, labels = new[0], new[1]
-    global max_n_sents, max_n_tokens, max_size
-    if count == 1:
-        max_size = 0
-        max_n_sents=0
-        max_n_tokens=0
-    max_n_sents = max(max_n_sents, len(src))
-    max_size = max(max_size, max_n_sents)
-    src_elements = count * max_size
-    return src_elements
-
-
 class Dataloader(object):
-    def __init__(self, args, datasets,  batch_size,
-                 device, shuffle, is_test):
+    def __init__(self, args, datasets,  batch_size, device, shuffle, is_test):
         self.args = args
         self.datasets = datasets
         self.batch_size = batch_size
         self.device = device
         self.shuffle = shuffle
         self.is_test = is_test
-        self.cur_iter = self._next_dataset_iterator(datasets)
 
+        self.cur_iter = self._next_dataset_iterator(datasets)
         assert self.cur_iter is not None
 
     def __iter__(self):
@@ -136,36 +140,33 @@ class Dataloader(object):
                 yield batch
             self.cur_iter = self._next_dataset_iterator(dataset_iter)
 
-
     def _next_dataset_iterator(self, dataset_iter):
         try:
-            # Drop the current dataset for decreasing memory
+            # Drop the current dataset to save memory.
             if hasattr(self, "cur_dataset"):
                 self.cur_dataset = None
                 gc.collect()
                 del self.cur_dataset
                 gc.collect()
-
+            # Move to next item in iterator.
             self.cur_dataset = next(dataset_iter)
         except StopIteration:
             return None
 
-        return DataIterator(args = self.args,
-            dataset=self.cur_dataset,  batch_size=self.batch_size,
-            device=self.device, shuffle=self.shuffle, is_test=self.is_test)
+        # Return DataIterator object.
+        return DataIterator(args=self.args, dataset=self.cur_dataset,  batch_size=self.batch_size,
+                            device=self.device, shuffle=self.shuffle, is_test=self.is_test)
 
 
 class DataIterator(object):
-    def __init__(self, args, dataset,  batch_size,  device=None, is_test=False,
-                 shuffle=True):
+    def __init__(self, args, dataset,  batch_size,  device=None,
+                 is_test=False, shuffle=True):
         self.args = args
-        self.batch_size, self.is_test, self.dataset = batch_size, is_test, dataset
+        self.batch_size, self.dataset = batch_size, dataset
         self.iterations = 0
         self.device = device
-        self.shuffle = shuffle
-
+        self.shuffle, self.is_test = shuffle, is_test
         self.sort_key = lambda x: len(x[1])
-
         self._iterations_this_epoch = 0
 
     def data(self):
@@ -176,30 +177,31 @@ class DataIterator(object):
 
     def preprocess(self, ex, is_test):
         src = ex['src']
-        if('labels' in ex):
+        if 'labels' in ex:
             labels = ex['labels']
         else:
             labels = ex['src_sent_labels']
 
         segs = ex['segs']
-        if(not self.args.use_interval):
-            segs=[0]*len(segs)
+        if not self.args.use_interval:
+            segs = [0] * len(segs)
+
         clss = ex['clss']
         src_txt = ex['src_txt']
         tgt_txt = ex['tgt_txt']
 
-        if(is_test):
-            return src,labels,segs, clss, src_txt, tgt_txt
+        if is_test:
+            return src, labels, segs, clss, src_txt, tgt_txt
         else:
-            return src,labels,segs, clss
+            return src, labels, segs, clss
 
     def batch_buffer(self, data, batch_size):
         minibatch, size_so_far = [], 0
         for ex in data:
-            if(len(ex['src'])==0):
+            if len(ex['src']) == 0:
                 continue
             ex = self.preprocess(ex, self.is_test)
-            if(ex is None):
+            if ex is None:
                 continue
             minibatch.append(ex)
             size_so_far = simple_batch_size_fn(ex, len(minibatch))
@@ -221,7 +223,7 @@ class DataIterator(object):
             p_batch = batch(p_batch, self.batch_size)
 
             p_batch = list(p_batch)
-            if (self.shuffle):
+            if self.shuffle:
                 random.shuffle(p_batch)
             for b in p_batch:
                 yield b

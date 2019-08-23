@@ -11,8 +11,6 @@ from models import action
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("-encoder", default='classifier', type=str,
-                        choices=['classifier', 'transformer', 'rnn', 'dnn', 'baseline'])
     parser.add_argument("-mode", default='train', type=str, choices=['train', 'validate', 'test'])
     parser.add_argument("-data_path", default='../xlnet_data/cnndm')
     parser.add_argument("-model_path", default='../models/')

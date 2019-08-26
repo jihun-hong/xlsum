@@ -8,6 +8,7 @@ import zipfile
 import subprocess
 
 from os.path import join
+from pathlib import Path
 from multiprocess import Pool
 from pytorch_transformers import XLNetTokenizer
 
@@ -16,7 +17,7 @@ from prepro.utils import greedy, combination
 from others.utils import logger
 
 
-# configures Stanford CoreNLP
+# Configure Stanford CoreNLP.
 def configure_tokenizer(args):
     link_map = {'stanford-corenlp': 'http://nlp.stanford.edu/software/stanford-corenlp-full-2018-10-05.zip'}
 
@@ -38,11 +39,11 @@ def configure_tokenizer(args):
                                                                                           args.tokenizer_ver)
 
 
-# Tokenize the raw stories using Stanford CoreNLP
+# Tokenize the raw stories using Stanford CoreNLP.
 def tokenize(args):
-    # directory to original story files
+    # Directory to original story files.
     stories_dir = os.path.abspath(args.raw_path)
-    # directory to tokenized data files
+    # Directory to tokenized data files.
     tokenized_dir = os.path.abspath(args.tokenized_path)
 
     print("Starting to tokenize %s to %s..." % (stories_dir, tokenized_dir))
@@ -57,19 +58,26 @@ def tokenize(args):
 
     configure_tokenizer(args)
 
-    # use Stanford CoreNLP
+    # Tokenize using Stanford CoreNLP.
     command = ['java', 'edu.stanford.nlp.pipeline.StanfordCoreNLP', '-annotators', 'tokenize, ssplit',
                '-ssplit.newlineIsSentenceBreak', 'always', '-filelist', 'mapping_for_corenlp.txt',
                '-outputFormat', 'json', '-outputDirectory', tokenized_dir]
     subprocess.call(command)
     os.remove("mapping_for_corenlp.txt")
 
-    # check if number of tokenized stories match the number of original stories
+    # Check if number of tokenized stories match number of original stories.
     num_original = len(os.listdir(stories_dir))
     num_tokenized = len(os.listdir(tokenized_dir))
     if num_original != num_tokenized:
         print("Warning! The tokenized directory %s contains %i files, but the original directory %s contains %i files"
               % (tokenized_dir, num_tokenized, stories_dir, num_original))
+
+
+def _format_json(param):
+    f, args = param
+    print(f)
+    src, tgt = load_json(f, args.lower)
+    return {'src': src, 'tgt': tgt}
 
 
 def format_json(args):
@@ -80,11 +88,11 @@ def format_json(args):
         temp = []
         for line in open(join(args.map_path, 'mapping_' + corpus_type + '.txt')):
             temp.append(hashhex(line.strip()))
-        corpus_mapping[type] = {key.strip(): 1 for key in temp}
+        corpus_mapping[corpus_type] = {key.strip(): 1 for key in temp}
 
     train_files, valid_files, test_files = [], [], []
     for f in glob.glob(join(args.tokenized_path, '*.json')):
-        real_name = f.split('/')[-1].split('.')[0]
+        real_name = os.path.basename(f).split('.')[0]
         if real_name in corpus_mapping['valid']:
             valid_files.append(f)
         elif real_name in corpus_mapping['test']:
@@ -101,11 +109,12 @@ def format_json(args):
         for d in pool.imap_unordered(_format_json, a_lst):
             data_set.append(d)
             if len(data_set) > args.shard_size:
-                pt_file = "{:s}.{:s}.{:d}.json".format(args.save_path, corpus_type, p_ct)
+                pt_file = "{:s}.{:s}.{:d}.json".format(args.json_path, corpus_type, p_ct)
                 with open(pt_file, 'w') as save:
                     save.write(json.dumps(data_set))
                     p_ct += 1
                     data_set = []
+                    print("saving ...")
 
         pool.close()
         pool.join()
@@ -117,19 +126,12 @@ def format_json(args):
                 p_ct += 1
 
 
-def _format_json(param):
-    f, args = param
-    print(f)
-    src, tgt = load_json(f, args.lower)
-    return {'src': src, 'tgt': tgt}
-
-
 def load_json(p, lower):
     src = []
     tgt = []
     flag = False
 
-    for sent in json.load(open(p))['sentences']:
+    for sent in json.load(open(p, 'rt', encoding='UTF8'))['sentences']:
         tokens = [t['word'] for t in sent['tokens']]
         # change all words to lower case
         if lower:
@@ -149,7 +151,7 @@ def load_json(p, lower):
 
 
 def format_xlnet(args):
-    if args.dataset != '':
+    if args.dataset is not '':
         data_type = [args.dataset]
     else:
         data_type = ['train', 'valid', 'test']
@@ -157,12 +159,13 @@ def format_xlnet(args):
     for corpus_type in data_type:
         a_lst = []
         for json_f in glob.glob(join(args.json_path, '*' + corpus_type + '.*.json')):
-            real_name = json_f.split('/')[-1]
+            real_name = os.path.basename(json_f)
+            print(real_name)
             a_lst.append((json_f, args, join(args.save_path, real_name.replace('json', 'bert.pt'))))
         print(a_lst)
 
         pool = Pool(args.n_cpus)
-        for d in pool.imap(_format_xlnet, a_lst):
+        for _ in pool.imap(_format_xlnet, a_lst):
             pass
 
         pool.close()
@@ -210,9 +213,9 @@ class XLData:
     def __init__(self, args):
         self.args = args
         self.tokenizer = XLNetTokenizer.from_pretrained('xlnet-base-cased')
-        self.sep_id = self.tokenizer.vocab['[SEP]']
-        self.cls_id = self.tokenizer.vocab['[CLS]']
-        self.pad_id = self.tokenizer.vocab['[PAD]']
+        self.sep_id = self.tokenizer.sep_token
+        self.cls_id = self.tokenizer.cls_token
+        self.pad_id = self.tokenizer.pad_token
 
     def process(self, src, tgt, oracle_ids):
         """

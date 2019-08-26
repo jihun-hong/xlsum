@@ -11,11 +11,13 @@ from models import action
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
+    # Configure paths.
     parser.add_argument("-mode", default='train', type=str, choices=['train', 'validate', 'test'])
     parser.add_argument("-data_path", default='../xlnet_data/cnndm')
     parser.add_argument("-model_path", default='../models/')
     parser.add_argument("-result_path", default='../results/cnndm')
-    parser.add_argument("-temp_dir", default='../temp')
+    parser.add_argument("-temp_path", default='../temp')
+    parser.add_argument("-config_path", default='../config')
 
     parser.add_argument("-batch_size", default=1000, type=int)
 
@@ -26,6 +28,7 @@ if __name__ == '__main__':
     parser.add_argument("-inter_layers", default=2, type=int)
     parser.add_argument("-rnn_size", default=512, type=int)
 
+    # Training parameters.
     parser.add_argument("-param_init", default=0, type=float)
     parser.add_argument("-param_init_glorot", type=str2bool, nargs='?', const=True, default=True)
     parser.add_argument("-dropout", default=0.1, type=float)
@@ -70,10 +73,6 @@ if __name__ == '__main__':
         action.train(args, device_id)
     elif args.mode == 'validate':
         action.wait_and_validate(args, device_id)
-    elif args.mode == 'lead':
-        action.baseline(args, cal_lead=True)
-    elif args.mode == 'oracle':
-        action.baseline(args, cal_oracle=True)
     elif args.mode == 'test':
         cp = args.test_from
         try:

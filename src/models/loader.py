@@ -87,26 +87,28 @@ def simple_batch_size_fn(new, count):
     return src_elements
 
 
-def load_dataset(args, corpus_type, shuffle):
+def load_dataset(args, corpus_type, shuffle=True):
     """
     Dataset generator. Don't do extra stuff here, like printing,
     because they will be postponed to the first loading time.
 
     Args:
+        args: args from main workflow
         corpus_type: 'train' or 'valid'
+        shuffle: shuffle the dataset(s)
     Returns:
         A list of dataset, the dataset(s) are lazily loaded.
     """
     assert corpus_type in ["train", "valid", "test"]
 
-    # Loads pt file to dataset, prints message.
+    # Load single pt file to dataset, prints message.
     def _lazy_dataset_loader(pt_file, corpus_type):
         dataset = torch.load(pt_file)
         logger.info('Loading %s dataset from %s, number of examples: %d' %
                     (corpus_type, pt_file, len(dataset)))
         return dataset
 
-    # Sort the glob output by file name (by increasing indexes).
+    # Sort the glob output by file name by increasing indices.
     pts = sorted(glob.glob(args.bert_data_path + '.' + corpus_type + '.[0-9]*.pt'))
     if pts:
         # Shuffle the dataset.
@@ -148,6 +150,7 @@ class Dataloader(object):
                 gc.collect()
                 del self.cur_dataset
                 gc.collect()
+
             # Move to next item in iterator.
             self.cur_dataset = next(dataset_iter)
         except StopIteration:
@@ -190,6 +193,7 @@ class DataIterator(object):
         src_txt = ex['src_txt']
         tgt_txt = ex['tgt_txt']
 
+        # Returns src_txt, tgt_txt only if test.
         if is_test:
             return src, labels, segs, clss, src_txt, tgt_txt
         else:

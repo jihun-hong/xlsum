@@ -12,6 +12,8 @@ from models.builder import Summarizer
 from models.trainer import build_trainer
 from models.loader import Dataloader, load_dataset
 
+from pytorch_transformers import XLNetConfig
+
 model_flags = ['hidden_size', 'ff_size', 'heads', 'inter_layers','encoder','ff_actv', 'use_interval','rnn_size']
 
 
@@ -96,37 +98,38 @@ def run(args, device_id, error_queue):
 
 
 def train(args, device_id):
+    # Start logger.
     init_logger(args.log_file)
 
-    # Configure training device
+    # Configure training device.
     device = "cpu" if args.visible_gpus == '-1' else "cuda"
     logger.info('Device ID %d' % device_id)
     logger.info('Device %s' % device)
 
-    # Configure manual seed
+    # Configure manual seed.
     torch.manual_seed(args.seed)
     random.seed(args.seed)
     torch.backends.cudnn.deterministic = True
 
-    # Set CUDA device
+    # Set CUDA device.
     if device_id >= 0:
         torch.cuda.set_device(device_id)
         torch.cuda.manual_seed(args.seed)
 
-    # Configure manual seed
+    # Configure manual seed.
     torch.manual_seed(args.seed)
     random.seed(args.seed)
     torch.backends.cudnn.deterministic = True
 
-    # Iterator used for training
+    # Dataloader used for training.
     def train_iter_fct():
         return Dataloader(args, load_dataset(args, 'train', shuffle=True),
                           args.batch_size, device, shuffle=True, is_test=False)
 
-    # Build the model
+    # Build the model.
     model = Summarizer(args, device, load_pretrained_bert=True)
 
-    # Configure the checkpoint
+    # Configure the checkpoint.
     if args.train_from != '':
         logger.info('Loading checkpoint from %s' % args.train_from)
         checkpoint = torch.load(args.train_from, map_location=lambda storage, loc: storage)
@@ -149,7 +152,10 @@ def train(args, device_id):
 
 def test(args, device_id, pt, step):
 
+    # Configure device name.
     device = "cpu" if args.visible_gpus == '-1' else "cuda"
+
+    # Configure model checkpoint.
     if pt != '':
         test_from = pt
     else:
@@ -162,16 +168,16 @@ def test(args, device_id, pt, step):
             setattr(args, k, opt[k])
     print(args)
 
-    config = BertConfig.from_json_file(args.bert_config_path)
-    model = Summarizer(args, device, load_pretrained_bert=False, bert_config = config)
+    # Load XLNet configuration.
+    config = XLNetConfig.from_pretrained(args.config_path)
+    model = Summarizer(args, device, load_pretrained_bert=False, bert_config=config)
     model.load_cp(checkpoint)
     model.eval()
 
     test_iter = Dataloader(args, load_dataset(args, 'test', shuffle=False),
-                                  args.batch_size, device,
-                                  shuffle=False, is_test=True)
+                           args.batch_size, device, shuffle=False, is_test=True)
     trainer = build_trainer(args, device_id, model, None)
-    trainer.test(test_iter,step)
+    trainer.test(test_iter, step)
 
 
 def wait_and_validate(args, device_id):
@@ -230,11 +236,11 @@ def validate(args,  device_id, pt, step):
     checkpoint = torch.load(test_from, map_location=lambda storage, loc: storage)
     opt = vars(checkpoint['opt'])
     for k in opt.keys():
-        if (k in model_flags):
+        if k in model_flags:
             setattr(args, k, opt[k])
     print(args)
 
-    config = BertConfig.from_json_file(args.bert_config_path)
+    config = XLNetConfig.from_pretrained(args.config_path)
     model = Summarizer(args, device, load_pretrained_bert=False, bert_config = config)
     model.load_cp(checkpoint)
     model.eval()

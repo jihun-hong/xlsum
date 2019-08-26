@@ -8,7 +8,6 @@ import zipfile
 import subprocess
 
 from os.path import join
-from pathlib import Path
 from multiprocess import Pool
 from pytorch_transformers import XLNetTokenizer
 
@@ -161,7 +160,7 @@ def format_xlnet(args):
         for json_f in glob.glob(join(args.json_path, '*' + corpus_type + '.*.json')):
             real_name = os.path.basename(json_f)
             print(real_name)
-            a_lst.append((json_f, args, join(args.save_path, real_name.replace('json', 'bert.pt'))))
+            a_lst.append((json_f, args, join(args.save_path, real_name.replace('json', 'xlnet.pt'))))
         print(a_lst)
 
         pool = Pool(args.n_cpus)
@@ -254,9 +253,9 @@ class XLData:
             return None
 
         src_txt = [' '.join(sent) for sent in src]
-        text = ' [SEP] [CLS]'.join(src_txt)
+        text = ' <sep> <cls> '.join(src_txt)
         src_subtokens = self.tokenizer.tokenize(text)
-        src_subtokens = src_subtokens + ['[SEP]'] + ['[CLS]']
+        src_subtokens = src_subtokens + ['<sep>'] + ['<cls>']
 
         src_subtoken_idxs = self.tokenizer.convert_tokens_to_ids(src_subtokens)
         _segs = [-1] + [i for i, t in enumerate(src_subtoken_idxs) if t == self.cls_id]

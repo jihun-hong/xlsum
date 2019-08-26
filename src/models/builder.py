@@ -61,7 +61,7 @@ class Summarizer(nn.Module):
         self.xlnet = XLNet(args.temp_dir, load_pretrained, xlnet_config=config)
         self.layer = Classifier(self.xlnet.model.config.d_model)
 
-        # Initialize parameters
+        # Initialize parameters.
         if args.param_init != 0.0:
             for p in self.layer.parameters():
                 p.data.uniform_(-args.param_init, args.param_init)

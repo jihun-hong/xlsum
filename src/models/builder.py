@@ -3,7 +3,7 @@ import torch.nn as nn
 from pytorch_transformers import XLNetModel
 from torch.nn.init import xavier_uniform_
 
-from models.layer import Classifier, Transformer
+from models.layer import Classifier
 from models.optimizers import Optimizer
 
 

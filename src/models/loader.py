@@ -109,7 +109,7 @@ def load_dataset(args, corpus_type, shuffle=True):
         return dataset
 
     # Sort the glob output by file name by increasing indices.
-    pts = sorted(glob.glob(args.bert_data_path + '.' + corpus_type + '.[0-9]*.pt'))
+    pts = sorted(glob.glob(args.data_path + '.' + corpus_type + '.[0-9]*.xlnet.pt'))
     if pts:
         # Shuffle the dataset.
         if shuffle:
@@ -119,7 +119,7 @@ def load_dataset(args, corpus_type, shuffle=True):
             yield _lazy_dataset_loader(pt, corpus_type)
     else:
         # Only one pt file.
-        pt = args.bert_data_path + '.' + corpus_type + '.pt'
+        pt = args.data_path + '.' + corpus_type + '.xlnet.pt'
         yield _lazy_dataset_loader(pt, corpus_type)
 
 

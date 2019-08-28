@@ -40,7 +40,7 @@ class Batch(object):
             setattr(self, 'mask', mask.to(device))
 
             # Set clss, mask_cls.
-            clss = torch.tensor(self._pad(pre_clss, -1))
+            clss = torch.tensor(self._pad(pre_clss, -1), dtype=torch.int64)
             mask_cls = 1 - (clss == -1)
             clss[clss == -1] = 0
 

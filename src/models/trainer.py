@@ -6,8 +6,7 @@ import distributed
 
 from others.reporter import ReportMgr
 from others.stats import Statistics
-from others.logging import logger
-from others.utils import test_rouge, rouge_results_to_str
+from others.utils import test_rouge, rouge_results_to_str, logger
 
 
 def _tally_parameters(model):
@@ -51,7 +50,7 @@ def build_trainer(args, device_id, model, optim):
 
 
 class Trainer(object):
-    def __init__(self,  args, model,  optim, grad_accum_count=1, n_gpu=1, gpu_rank=1, report_manager=None):
+    def __init__(self,  args, model, optim, grad_accum_count=1, n_gpu=1, gpu_rank=1, report_manager=None):
         # Basic attributes
         self.args = args
         self.save_checkpoint_steps = args.save_checkpoint_steps
@@ -143,7 +142,7 @@ class Trainer(object):
                 mask = batch.mask
                 mask_cls = batch.mask_cls
 
-                sent_scores, mask = self.model(src, segs, clss, mask, mask_cls)
+                sent_scores, mask = self.model(src, clss, mask, mask_cls)
 
                 loss = self.loss(sent_scores, labels.float())
                 loss = (loss * mask.float()).sum()
@@ -202,7 +201,7 @@ class Trainer(object):
                             selected_ids = [[j for j in range(batch.clss.size(1)) if labels[i][j] == 1] for i in
                                             range(batch.batch_size)]
                         else:
-                            sent_scores, mask = self.model(src, segs, clss, mask, mask_cls)
+                            sent_scores, mask = self.model(src, clss, mask, mask_cls)
 
                             loss = self.loss(sent_scores, labels.float())
                             loss = (loss * mask.float()).sum()
@@ -266,7 +265,7 @@ class Trainer(object):
             mask = batch.mask
             mask_cls = batch.mask_cls
 
-            sent_scores, mask = self.model(src, segs, clss, mask, mask_cls)
+            sent_scores, mask = self.model(src, clss, mask, mask_cls)
 
             # Calculate loss and propagate backwards
             loss = self.loss(sent_scores, labels.float())

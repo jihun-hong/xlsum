@@ -16,7 +16,7 @@ if __name__ == '__main__':
     parser.add_argument("-data_path", default='../xlnet_data/cnndm')
     parser.add_argument("-model_path", default='../models/')
     parser.add_argument("-result_path", default='../results/cnndm')
-    parser.add_argument("-temp_path", default='../temp')
+    parser.add_argument("-temp_dir", default='../temp')
     parser.add_argument("-config_path", default='../config')
 
     parser.add_argument("-batch_size", default=1000, type=int)

@@ -127,7 +127,7 @@ def train(args, device_id):
                           args.batch_size, device, shuffle=True, is_test=False)
 
     # Build the model.
-    model = Summarizer(args, device, load_pretrained_bert=True)
+    model = Summarizer(args, device, load_pretrained=True)
 
     # Configure the checkpoint.
     if args.train_from != '':

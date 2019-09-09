@@ -4,13 +4,16 @@ import torch.optim as optim
 from torch.nn.utils import clip_grad_norm_
 
 
+# from onmt.utils import use_gpu
+# from models.adam import Adam
+
+
 def use_gpu(opt):
     """
     Creates a boolean if gpu used
     """
     return (hasattr(opt, 'gpu_ranks') and len(opt.gpu_ranks) > 0) or \
            (hasattr(opt, 'gpu') and opt.gpu > -1)
-
 
 def build_optim(model, opt, checkpoint):
     """ Build optimizer """
@@ -36,35 +39,16 @@ def build_optim(model, opt, checkpoint):
             decay_method=opt.decay_method,
             warmup_steps=opt.warmup_steps)
 
-    # Stage 1:
-    # Essentially optim.set_parameters (re-)creates and optimizer using
-    # model.paramters() as parameters that will be stored in the
-    # optim.optimizer.param_groups field of the torch optimizer class.
-    # Importantly, this method does not yet load the optimizer state, as
-    # essentially it builds a new optimizer with empty optimizer state and
-    # parameters from the model.
     optim.set_parameters(model.named_parameters())
 
     if opt.train_from:
-        # Stage 2: In this stage, which is only performed when loading an
-        # optimizer from a checkpoint, we load the saved_optimizer_state_dict
-        # into the re-created optimizer, to set the optim.optimizer.state
-        # field, which was previously empty. For this, we use the optimizer
-        # state saved in the "saved_optimizer_state_dict" variable for
-        # this purpose.
-        # See also: https://github.com/pytorch/pytorch/issues/2830
         optim.optimizer.load_state_dict(saved_optimizer_state_dict)
-        # Convert back the state values to cuda type if applicable
         if use_gpu(opt):
             for state in optim.optimizer.state.values():
                 for k, v in state.items():
                     if torch.is_tensor(v):
                         state[k] = v.cuda()
 
-        # We want to make sure that indeed we have a non-empty optimizer state
-        # when we loaded an existing model. This should be at least the case
-        # for Adam, which saves "exp_avg" and "exp_avg_sq" state
-        # (Exponential moving average of gradient and squared gradient values)
         if (optim.method == 'adam') and (len(optim.optimizer.state) < 1):
             raise RuntimeError(
                 "Error: loaded Adam optimizer from existing model" +
@@ -123,6 +107,7 @@ class Optimizer(object):
       adagrad_accum (float, optional): initialization parameter for adagrad
       decay_method (str, option): custom decay options
       warmup_steps (int, option): parameter for `noam` decay
+      model_size (int, option): parameter for `noam` decay
 
     We use the default parameters for Adam that are suggested by
     the original paper https://arxiv.org/pdf/1412.6980.pdf
@@ -141,8 +126,7 @@ class Optimizer(object):
                  beta1=0.9, beta2=0.999,
                  adagrad_accum=0.0,
                  decay_method=None,
-                 warmup_steps=4000
-                 ):
+                 warmup_steps=4000, weight_decay=0):
         self.last_ppl = None
         self.learning_rate = learning_rate
         self.original_lr = learning_rate
@@ -157,6 +141,7 @@ class Optimizer(object):
         self.adagrad_accum = adagrad_accum
         self.decay_method = decay_method
         self.warmup_steps = warmup_steps
+        self.weight_decay = weight_decay
 
     def set_parameters(self, params):
         """ ? """
@@ -181,12 +166,6 @@ class Optimizer(object):
         elif self.method == 'adam':
             self.optimizer = optim.Adam(self.params, lr=self.learning_rate,
                                         betas=self.betas, eps=1e-9)
-        elif self.method == 'sparseadam':
-            self.optimizer = MultipleOptimizer(
-                [optim.Adam(self.params, lr=self.learning_rate,
-                            betas=self.betas, eps=1e-8),
-                 optim.SparseAdam(self.sparse_params, lr=self.learning_rate,
-                                  betas=self.betas, eps=1e-8)])
         else:
             raise RuntimeError("Invalid optim method: " + self.method)
 
@@ -201,7 +180,8 @@ class Optimizer(object):
     def step(self):
         """Update the model parameters based on current gradients.
 
-        Optionally, will employ gradient modification or update learning rate.
+        Optionally, will employ gradient modification or update learning
+        rate.
         """
         self._step += 1
 
@@ -209,11 +189,9 @@ class Optimizer(object):
         if self.decay_method == "noam":
             self._set_rate(
                 self.original_lr *
-
                  min(self._step ** (-0.5),
                      self._step * self.warmup_steps**(-1.5)))
 
-        # Decay based on start_decay_steps every decay_steps
         else:
             if ((self.start_decay_steps is not None) and (
                      self._step >= self.start_decay_steps)):
@@ -229,3 +207,5 @@ class Optimizer(object):
         if self.max_grad_norm:
             clip_grad_norm_(self.params, self.max_grad_norm)
         self.optimizer.step()
+
+

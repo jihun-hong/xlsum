@@ -563,6 +563,9 @@ class Rouge155(object):
                 ]
             options = list(map(str, options))
 
+
+
+
         options = self.__add_config_option(options)
         return options
 

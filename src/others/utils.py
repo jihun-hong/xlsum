@@ -1,44 +1,9 @@
-from __future__ import absolute_import
-
 import os
 import re
-import time
 import shutil
-import logging
-import argparse
+import time
 
 from others import pyrouge
-
-
-logger = logging.getLogger()
-
-
-def init_logger(log_file=None, log_file_level=logging.NOTSET):
-    log_format = logging.Formatter("[%(asctime)s %(levelname)s] %(message)s")
-    logger = logging.getLogger()
-    logger.setLevel(logging.INFO)
-
-    console_handler = logging.StreamHandler()
-    console_handler.setFormatter(log_format)
-    logger.handlers = [console_handler]
-
-    if log_file and log_file != '':
-        file_handler = logging.FileHandler(log_file)
-        file_handler.setLevel(log_file_level)
-        file_handler.setFormatter(log_format)
-        logger.addHandler(file_handler)
-
-    return logger
-
-
-def str2bool(v):
-    if v.lower() in ('yes', 'true', 't', 'y', '1'):
-        return True
-    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
-        return False
-    else:
-        raise argparse.ArgumentTypeError('Boolean value expected.')
-
 
 REMAP = {"-lrb-": "(", "-rrb-": ")", "-lcb-": "{", "-rcb-": "}",
          "-lsb-": "[", "-rsb-": "]", "``": '"', "''": '"'}
@@ -126,12 +91,37 @@ def test_rouge(temp_dir, cand, ref):
     return results_dict
 
 
+def tile(x, count, dim=0):
+    """
+    Tiles x on dimension dim count times.
+    """
+    perm = list(range(len(x.size())))
+    if dim != 0:
+        perm[0], perm[dim] = perm[dim], perm[0]
+        x = x.permute(perm).contiguous()
+    out_size = list(x.size())
+    out_size[0] *= count
+    batch = x.size(0)
+    x = x.view(batch, -1) \
+         .transpose(0, 1) \
+         .repeat(count, 1) \
+         .transpose(0, 1) \
+         .contiguous() \
+         .view(*out_size)
+    if dim != 0:
+        x = x.permute(perm).contiguous()
+    return x
+
 def rouge_results_to_str(results_dict):
     return ">> ROUGE-F(1/2/3/l): {:.2f}/{:.2f}/{:.2f}\nROUGE-R(1/2/3/l): {:.2f}/{:.2f}/{:.2f}\n".format(
         results_dict["rouge_1_f_score"] * 100,
         results_dict["rouge_2_f_score"] * 100,
+        # results_dict["rouge_3_f_score"] * 100,
         results_dict["rouge_l_f_score"] * 100,
         results_dict["rouge_1_recall"] * 100,
         results_dict["rouge_2_recall"] * 100,
+        # results_dict["rouge_3_f_score"] * 100,
         results_dict["rouge_l_recall"] * 100
+
+        # ,results_dict["rouge_su*_f_score"] * 100
     )
